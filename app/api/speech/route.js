@@ -40,7 +40,23 @@ export async function POST(request) {
     const retryAfter=response.headers.get('Retry-After');
     return Response.json({error:`${providerName} rate limit reached. Wait, then generate missing audio.`},{status:429,headers:retryAfter?{'Retry-After':retryAfter}:{}});
    }
-   if(!response.ok)return Response.json({error:`${providerName} request failed (${response.status}). Check your voice, API key and plan access.`},{status:502});
+   if(elevenLabs&&!response.ok){
+    const failure=await response.json().catch(()=>null);
+    const detail=failure?.detail;
+    const message=typeof detail?.message==='string'?detail.message.replaceAll(key,'[redacted]').replaceAll(text,'[dialogue]').slice(0,500):'Check your credit balance, API key limits and voice access for your plan.';
+    return Response.json({error:`ElevenLabs (${response.status}): ${message}`},{status:response.status===402?402:502});
+   }
+   if(response.status===402)return Response.json({error:`${providerName} requires payment or more credits (402). Check the credit balance and billing for the account linked to your API key.`},{status:402});
+   if(!response.ok){
+    const failure=await response.json().catch(()=>null);
+    let detail=typeof failure?.error?.message==='string'?failure.error.message:'Check the model configuration and request format.';
+    detail=detail.replaceAll(key,'[redacted]');
+    for(const turn of turns||[{text,style}]){
+     if(turn.text)detail=detail.replaceAll(turn.text,'[dialogue]');
+     if(turn.style)detail=detail.replaceAll(turn.style,'[delivery]');
+    }
+    return Response.json({error:`Gemini (${response.status}): ${detail.slice(0,700)}`},{status:response.status===400?400:502});
+   }
    if(elevenLabs){
     const pcm=new Uint8Array(await response.arrayBuffer());
     if(!pcm.length||pcm.length%2||/json|mpeg|wav|html/i.test(response.headers.get('Content-Type')||''))throw Error('Invalid PCM audio.');
