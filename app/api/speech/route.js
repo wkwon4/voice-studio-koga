@@ -1,9 +1,9 @@
-import {VOICES} from '../../../lib/script.js';
 import {speechRequest,sceneSpeechRequest,extractAudio} from '../../../lib/gemini.js';
 import {SCENE_MAX_TEXT,SCENE_MAX_TURNS} from '../../../lib/generation.js';
 import {pcmToWav,readWav} from '../../../lib/wav.js';
 import {accessStatus} from '../../../lib/auth.js';
 import {isElevenLabsVoiceId} from '../../../lib/elevenlabs.js';
+import {validateGeminiVoices} from '../../../lib/gemini-voices.js';
 export const runtime='nodejs';
 export const maxDuration=60;
 export async function POST(request) {
@@ -18,12 +18,17 @@ export async function POST(request) {
   const elevenLabs=provider==='elevenlabs';
   if(elevenLabs&&turns!==undefined)return Response.json({error:'ElevenLabs uses line generation.'},{status:400});
   if(turns!==undefined){
-   if(!Array.isArray(turns)||turns.length<2||turns.length>SCENE_MAX_TURNS||turns.some(t=>!t||typeof t.text!=='string'||!t.text.trim()||typeof t.style!=='string'||t.style.length>300||typeof t.speaker!=='string'||!t.speaker.trim()||t.speaker.length>80||!VOICES.includes(t.voice))||turns.reduce((sum,t)=>sum+t.text.length,0)>SCENE_MAX_TEXT)
+   if(!Array.isArray(turns)||turns.length<2||turns.length>SCENE_MAX_TURNS||turns.some(t=>!t||typeof t.text!=='string'||!t.text.trim()||typeof t.style!=='string'||t.style.length>300||typeof t.speaker!=='string'||!t.speaker.trim()||t.speaker.length>80)||turns.reduce((sum,t)=>sum+t.text.length,0)>SCENE_MAX_TEXT)
     return Response.json({error:'Invalid scene. Try generating by line.'},{status:400});
    const cast=new Map(turns.map(t=>[t.speaker,t.voice]));
    if(cast.size>2||turns.some(t=>cast.get(t.speaker)!==t.voice))return Response.json({error:'A scene can have up to two speakers, each with one voice.'},{status:400});
   }else
-  if(typeof text!=='string'||!text.trim()||text.length>2500||typeof style!=='string'||style.length>300||!(elevenLabs?isElevenLabsVoiceId(voice):VOICES.includes(voice)))return Response.json({error:'Invalid text, delivery or voice.'},{status:400});
+  if(typeof text!=='string'||!text.trim()||text.length>2500||typeof style!=='string'||style.length>300||(elevenLabs&&!isElevenLabsVoiceId(voice)))return Response.json({error:'Invalid text, delivery or voice.'},{status:400});
+  if(!elevenLabs){
+   try{
+    if(!await validateGeminiVoices(turns?turns.map(turn=>turn.voice):[voice]))return Response.json({error:'Gemini voice is unavailable in this project. Load the voice library and choose an available voice.'},{status:400});
+   }catch{return Response.json({error:'Could not verify the selected Gemini voice. Try loading the voice library again.'},{status:502});}
+  }
   let audio;
   if(process.env.TTS_DEMO==='true'&&process.env.NODE_ENV!=='production') {const pcm=new Uint8Array(12000);const v=new DataView(pcm.buffer);for(let i=0;i<6000;i++)v.setInt16(i*2,Math.sin(i*2*Math.PI*440/24000)*1800,true);audio=pcmToWav(pcm);}
   else {
