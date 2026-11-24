@@ -5,6 +5,8 @@ import {planGeneration,invalidateClips,quotaDelay,waitForRetry,MAX_QUOTA_RETRIES
 import {isElevenLabsVoiceId} from '../lib/elevenlabs.js';
 import {combineWavs} from '../lib/wav.js';
 import {FORMAT_PROMPT} from '../lib/ai-parser.js';
+import {voiceHint,loadSavedVoices,storeSavedVoices} from '../lib/voice-info.js';
+import SavedVoices from './saved-voices.js';
 const SAMPLE=`KOGA [calm, reflective]: It was supposed to be an ordinary flight.
 
 SULLY [serious, focused]: We've lost both engines.
@@ -18,6 +20,16 @@ export default function Studio(){
  const [loadingVoices,setLoadingVoices]=useState(false);
  const [voiceLibraryMessage,setVoiceLibraryMessage]=useState('');
  const [voicePage,setVoicePage]=useState('');
+ const [savedVoices,setSavedVoicesState]=useState([]);
+ useEffect(()=>{setSavedVoicesState(loadSavedVoices());},[]);
+ function setSavedVoices(list){setSavedVoicesState(list);storeSavedVoices(list);}
+ const nicknames=Object.fromEntries(savedVoices.map(v=>[v.id,v.nickname.trim()||v.id]));
+ function voiceOptions(speaker){
+  const list=optionsFor(speaker),opt=v=>{const hint=voiceHint(v.id);return <option key={v.id} value={v.id}>{nicknames[v.id]?`★ ${nicknames[v.id]} — ${v.id}`:`${v.name}${hint?` · ${hint}`:''}${v.language?` · ${v.language}`:''}`}</option>;};
+  const mine=savedVoices.map(v=>list.find(o=>o.id===v.id)||{id:v.id,name:v.id,language:''});
+  const rest=list.filter(v=>!nicknames[v.id]);
+  return mine.length?[<optgroup key="saved" label="★ My saved voices">{mine.map(opt)}</optgroup>,<optgroup key="all" label="All voices">{rest.map(opt)}</optgroup>]:rest.map(opt);
+ }
  async function loadVoiceLibrary(more=false){
   setLoadingVoices(true);setVoiceLibraryMessage('');
   try{
@@ -139,10 +151,11 @@ export default function Studio(){
  {voicePage&&<button className="secondary" disabled={!!busy||loadingVoices} onClick={()=>loadVoiceLibrary(true)}>Load more voices</button>}
  <label>Search voices<input value={voiceSearch} placeholder="Nika, voice name or language" onChange={e=>setVoiceSearch(e.target.value)}/></label>
  <p role="status">{loadingVoices?'Loading voices…':voiceLibraryMessage}</p>
+ <SavedVoices options={geminiOptions} saved={savedVoices} setSaved={setSavedVoices} busy={busy}/>
  </div>}{!speakers.length&&<div className="empty">Parse your script to<br/>meet the cast.</div>}{speakers.map((name,i)=><label className="voice-row" key={name}><span className="avatar">{name.slice(0,1)}</span><span>{name}{isElevenLabs?<input aria-label={`${name} ElevenLabs voice ID`} placeholder="Voice ID" maxLength={100} disabled={!!busy} value={elevenVoices[name]||''} onChange={e=>{
    setElevenVoices(old=>({...old,[name]:e.target.value}));
    setElevenClips(old=>invalidateClips(old,sections.filter(s=>s.speaker===name).map(s=>s.id)));
-  }}/>:<select disabled={!!busy} value={voices[name]||'Charon'} onChange={e=>{setVoices({...voices,[name]:e.target.value});setClips(old=>invalidateClips(old,sections.filter(s=>s.speaker===name).map(s=>s.id)));}}>{optionsFor(name).map(v=><option key={v.id} value={v.id}>{v.name}{v.language?` · ${v.language}`:''}</option>)}</select>}</span></label>)}<div className="cast-note">Voice choices are saved automatically. Changing a voice clears that character’s takes.</div></aside></div>
+  }}/>:<select disabled={!!busy} value={voices[name]||'Charon'} onChange={e=>{setVoices({...voices,[name]:e.target.value});setClips(old=>invalidateClips(old,sections.filter(s=>s.speaker===name).map(s=>s.id)));}}>{voiceOptions(name)}</select>}</span></label>)}<div className="cast-note">Voice choices are saved automatically. Changing a voice clears that character’s takes.</div></aside></div>
  <section className="panel timeline"><div className="panel-heading"><h2><small>03</small> Recording desk <span className="count">{count}/{sections.length} ready</span></h2><div className="actions"><button disabled={!!busy||!sections.length||count===sections.length} onClick={()=>run(sections.filter(s=>!clips[s.id]))}>{count?'Generate missing':'Generate all'} ✦</button>{busy&&!parsing&&<button onClick={()=>{queue.current?.abort();setBusy('Stopping after any active request…');}}>Stop</button>}</div></div>
  <fieldset disabled={!!busy} className="generation-options"><legend>Generation options</legend><label>Group audio by <select disabled={isElevenLabs} value={isElevenLabs?'line':generationMode} onChange={e=>setGenerationMode(e.target.value)}><option value="line">Line</option><option value="scene">Scene</option></select></label><label><input type="checkbox" checked={autoRetry} onChange={e=>setAutoRetry(e.target.checked)}/> Automatically retry rate limits</label></fieldset>
  <p className="status">{isElevenLabs?'ElevenLabs generates one line at a time from the dialogue. The delivery field is used by Gemini.':'Scene mode groups nearby lines for up to two speakers into one clip. Retakes replace the whole clip.'} Keep this tab open and your device awake during generation.</p>{demo&&<p className="demo">DEMO MODE — synthetic test tones, not speech.</p>}<p role="status" className="status">{busy||message||'Your sections will appear here after parsing.'}</p>{busy&&<progress/>}{sections.map(s=><article className="take" key={s.id}><span className="take-number">{s.id.padStart(2,'0')}</span><div className="take-body"><div className="take-meta">{s.speaker} <span>{s.style||'Natural delivery'}</span></div><textarea aria-label={`Section ${s.id} dialogue`} disabled={!!busy} value={s.text} onChange={e=>{setSections(old=>old.map(x=>x.id===s.id?{...x,text:e.target.value}:x));invalidateSection(s.id);}}/><input aria-label={`Section ${s.id} delivery`} disabled={!!busy} value={s.style} maxLength={300} placeholder="Delivery direction" onChange={e=>{setSections(old=>old.map(x=>x.id===s.id?{...x,style:e.target.value}:x));invalidateSection(s.id);}}/>{clips[s.id]?.ids[0]===s.id&&<audio controls preload="none" src={clips[s.id].url}/>} {clips[s.id]?.ids.length>1&&<p className="status">Scene take · sections {clips[s.id].ids[0]}–{clips[s.id].ids.at(-1)}</p>}</div><button className="secondary" disabled={!!busy||!s.text.trim()||s.text.length>2500} onClick={()=>run([s],true)}>{clips[s.id]?.ids.length>1?'↻ Regenerate scene':clips[s.id]?'↻ Regenerate':'Generate'}</button></article>)}<footer><label>Pause between takes <select disabled={!!busy} value={gap} onChange={e=>setGap(Number(e.target.value))}>{[0,120,250,500,1000].map(n=><option key={n} value={n}>{n} ms</option>)}</select></label><button disabled={count===0} onClick={download}>↓ {count>0&&count<sections.length?`Download available WAV (${count}/${sections.length})`:'Download full WAV'}</button></footer></section><p className="footnote">KOGA VOICE STUDIO · Scripts and cast stay in this browser. Audio stays in this tab until you download it. Speech generation sends dialogue to the selected provider.</p></main>
