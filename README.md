@@ -1,6 +1,6 @@
-# Koga Voice Studio
+# Voice Studio
 
-Private Next.js/React script-to-speech MVP for KogaBlox. No database, paid hosting, FFmpeg, or client-side API key required. Browser storage saves the original script and character voices. Generated takes and edits made in the recording desk live in the current tab; download before closing or reparsing. Reparse discards takes. Voices may still vary across generations; matching voice IDs is not a guarantee of identical performance.
+Private Next.js/React script-to-speech MVP. No database, paid hosting, FFmpeg, or client-side API key required. Browser storage saves the original script and character voices. Generated takes and edits made in the recording desk live in the current tab; download before closing or reparsing. Reparse discards takes. Voices may still vary across generations; matching voice IDs is not a guarantee of identical performance.
 
 ## Run locally
 
@@ -13,7 +13,7 @@ Get a key from https://aistudio.google.com/apikey. Restart the server after chan
 Paste this format, then click Parse script:
 
 ```text
-KOGA [calm, reflective]: It was supposed to be an ordinary flight.
+NARRATOR [calm, reflective]: It was supposed to be an ordinary flight.
 SULLY [serious, focused]: We've lost both engines.
 SKILES [alarmed, speaking quickly]: We're losing altitude!
 ```
@@ -40,4 +40,4 @@ The pricing page lists a free tier for Flash-Lite TTS, subject to quotas and acc
 
 Local use is the default; this project has not been published. Push this folder to a private Git repository (exclude .env files and .runtime), import into Vercel as a Next.js project, select Node 22+, and configure `GEMINI_API_KEY`, `GEMINI_TTS_MODEL`, and a strong `STUDIO_PASSWORD` as server environment variables. Deploy and open the HTTPS address using username `koga`. Confirm unauthenticated requests are challenged and test a short section before a full script. Never enable demo for deployed use. Keep dependencies updated.
 
-Vercel Hobby permits personal/non-commercial use only. A private tool supporting monetized KogaBlox production may be commercial: use local hosting or a plan allowing commercial use (such as Vercel Pro). You can upgrade the same project later without rebuilding. See https://vercel.com/docs/plans/hobby and https://vercel.com/legal/terms. Each section uses one serverless request with a 50-second upstream timeout and a 60-second route duration. Check your selected plan's duration and payload limits; use shorter sections if necessary. Durable quotas, robust multi-user auth, background jobs and object storage are future work before broader access.
+Vercel Hobby permits personal/non-commercial use only. A private tool supporting monetized production may be commercial: use local hosting or a plan allowing commercial use (such as Vercel Pro). You can upgrade the same project later without rebuilding. See https://vercel.com/docs/plans/hobby and https://vercel.com/legal/terms. Each section uses one serverless request with a 50-second upstream timeout and a 60-second route duration. Check your selected plan's duration and payload limits; use shorter sections if necessary. Durable quotas, robust multi-user auth, background jobs and object storage are future work before broader access.
